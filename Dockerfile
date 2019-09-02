@@ -1,17 +1,17 @@
-# Build Gwan in a stock Go builder container
-FROM golang:1.12-alpine as builder
+# builder image
+FROM golang:1.12-alpine3.10 as builder
 
 RUN apk add --no-cache make gcc git musl-dev linux-headers
+WORKDIR /go/src/github.com/wanchain/go-wanchain
+COPY . .
+RUN make gwan
 
-ADD . /go-wanchain
-RUN cd /go-wanchain && make gwan
+# final image
+FROM alpine:3.10
+MAINTAINER Linki <linki+docker.com@posteo.de>
 
-# Pull Geth into a second stage deploy alpine container
-FROM alpine:latest
+RUN apk --no-cache add ca-certificates dumb-init
+COPY --from=builder /go/src/github.com/wanchain/go-wanchain/build/bin/gwan /bin/gwan
 
-RUN apk add --no-cache ca-certificates
-RUN apk add --no-cache curl
-COPY --from=builder /go-wanchain/build/bin/gwan /usr/local/bin/
-
-EXPOSE 8545 17717/tcp 17717/udp
-ENTRYPOINT ["gwan"]
+USER 65534
+ENTRYPOINT ["dumb-init", "--", "/bin/gwan"]
