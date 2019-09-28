@@ -1,5 +1,5 @@
 # builder image
-FROM golang:1.12-alpine3.10 as builder
+FROM golang:1.13-alpine3.10 as builder
 
 RUN apk add --no-cache make gcc git musl-dev linux-headers
 WORKDIR /go/src/github.com/wanchain/go-wanchain
