@@ -17,21 +17,27 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io/ioutil"
+	"strings"
+
+	"github.com/davecgh/go-spew/spew"
 	"github.com/wanchain/go-wanchain/awskms"
 	"github.com/wanchain/go-wanchain/common"
 	"github.com/wanchain/go-wanchain/crypto"
 	"github.com/wanchain/go-wanchain/pos/posconfig"
-	"io/ioutil"
-	"strings"
 
 	"github.com/wanchain/go-wanchain/accounts"
 	"github.com/wanchain/go-wanchain/accounts/keystore"
 	"github.com/wanchain/go-wanchain/cmd/utils"
 	"github.com/wanchain/go-wanchain/console"
-	"github.com/wanchain/go-wanchain/crypto/bn256/cloudflare"
+	bn256 "github.com/wanchain/go-wanchain/crypto/bn256/cloudflare"
 	"github.com/wanchain/go-wanchain/log"
 	"gopkg.in/urfave/cli.v1"
+
+	secretmanager "cloud.google.com/go/secretmanager/apiv1beta1"
+	secretmanagerpb "google.golang.org/genproto/googleapis/cloud/secretmanager/v1beta1"
 )
 
 var (
@@ -283,6 +289,71 @@ func unlockAccount(ctx *cli.Context, ks *keystore.KeyStore, address string, i in
 	return accounts.Account{}, ""
 }
 
+func unlockAccountFromGoogleSecret(ctx *cli.Context, ks *keystore.KeyStore, address string, i int, passwords []string) (accounts.Account, string) {
+	fmt.Println("foo")
+
+	// spew.Dump( address, i, passwords)
+
+	account, err := utils.MakeAddress(ks, address)
+	if err != nil {
+		utils.Fatalf("Could not list accounts: %v", err)
+	}
+
+	a, err := ks.Find(account)
+	if err != nil {
+		utils.Fatalf("Could not find the account: %v", err)
+	}
+
+	spew.Dump(account)
+	spew.Dump(a)
+
+	// Create the client.
+	ctx2 := context.Background()
+	client, err := secretmanager.NewClient(ctx2)
+	if err != nil {
+		utils.Fatalf("failed to setup client: %v", err)
+	}
+
+	theSecret := "projects/<projectid>/secrets/<secretname>/versions/<versionnumber>"
+
+	// Build the request.
+	accessRequest := &secretmanagerpb.AccessSecretVersionRequest{
+		Name: theSecret,
+	}
+
+	// Call the API.
+	result, err := client.AccessSecretVersion(ctx2, accessRequest)
+	if err != nil {
+		utils.Fatalf("failed to access secret version: %v", err)
+	}
+
+	// Print the secret payload.
+	//
+	// WARNING: Do not print the secret in a production environment - this
+	// snippet is showing how to access the secret material.
+	fmt.Println("Plaintext: %s", result.Payload.Data)
+
+	password := string(result.Payload.Data)
+
+	err = ks.Unlock(account, password)
+	if err == nil {
+		fmt.Println("Unlocked account", "address", account.Address.Hex())
+		return account, password
+	}
+	if err, ok := err.(*keystore.AmbiguousAddrError); ok {
+		fmt.Println("Unlocked account", "address", account.Address.Hex())
+		return ambiguousAddrRecovery(ks, err, password), password
+	}
+	if err != keystore.ErrDecrypt {
+		utils.Fatalf("fail big")
+	}
+
+	// All trials expended to unlock account, bail out
+	utils.Fatalf("Failed to unlock account %s (%v)", address, err)
+
+	return accounts.Account{}, ""
+}
+
 func unlockAccountFromAwsKmsFile(ctx *cli.Context, ks *keystore.KeyStore, address string, i int, passwords []string) (accounts.Account, string) {
 	account, err := utils.MakeAddress(ks, address)
 	if err != nil {
@@ -528,7 +599,7 @@ func accountEncrypt(ctx *cli.Context) error {
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	for _, addr := range ctx.Args() {
 		exceptAddr := common.HexToAddress(addr)
-		a := accounts.Account{Address:exceptAddr}
+		a := accounts.Account{Address: exceptAddr}
 		fa, err := ks.Find(a)
 		if err != nil {
 			return err
@@ -540,7 +611,7 @@ func accountEncrypt(ctx *cli.Context) error {
 			return err
 		}
 
-		fmt.Println("encrypt account(",  addr, ") successfully into new keystore file : ", desFile)
+		fmt.Println("encrypt account(", addr, ") successfully into new keystore file : ", desFile)
 	}
 
 	return nil
@@ -564,7 +635,7 @@ func accountDecrypt(ctx *cli.Context) error {
 	ks := stack.AccountManager().Backends(keystore.KeyStoreType)[0].(*keystore.KeyStore)
 	for _, addr := range ctx.Args() {
 		exceptAddr := common.HexToAddress(addr)
-		a := accounts.Account{Address:exceptAddr}
+		a := accounts.Account{Address: exceptAddr}
 		fa, err := ks.Find(a)
 		if err != nil {
 			return err
@@ -583,7 +654,7 @@ func accountDecrypt(ctx *cli.Context) error {
 			return err
 		}
 
-		fmt.Println("decrypt account(",  addr, ") successfully into new keystore file : ", desFile)
+		fmt.Println("decrypt account(", addr, ") successfully into new keystore file : ", desFile)
 	}
 
 	return nil
@@ -603,4 +674,3 @@ func getAwsKmsSecretInfo(notice string, items []string) ([]string, error) {
 
 	return inputs, nil
 }
-

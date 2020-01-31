@@ -28,6 +28,7 @@ import (
 
 	"github.com/wanchain/go-wanchain/accounts"
 	"github.com/wanchain/go-wanchain/accounts/keystore"
+	fullFaucet "github.com/wanchain/go-wanchain/cmd/fullfaucet"
 	"github.com/wanchain/go-wanchain/cmd/utils"
 	"github.com/wanchain/go-wanchain/common"
 	"github.com/wanchain/go-wanchain/console"
@@ -35,11 +36,10 @@ import (
 	"github.com/wanchain/go-wanchain/ethclient"
 	"github.com/wanchain/go-wanchain/internal/debug"
 	"github.com/wanchain/go-wanchain/log"
-	"github.com/wanchain/go-wanchain/pos/posconfig"
 	"github.com/wanchain/go-wanchain/metrics"
 	"github.com/wanchain/go-wanchain/node"
+	"github.com/wanchain/go-wanchain/pos/posconfig"
 	"gopkg.in/urfave/cli.v1"
-	"github.com/wanchain/go-wanchain/cmd/fullfaucet"
 )
 
 const (
@@ -231,8 +231,8 @@ func main() {
 // blocking mode, waiting for it to be shut down.
 func geth(ctx *cli.Context) error {
 
-	ctx.GlobalSet("txpool.nolocals","true")
-	ctx.GlobalSet("txpool.pricelimit","180000000000")
+	ctx.GlobalSet("txpool.nolocals", "true")
+	ctx.GlobalSet("txpool.pricelimit", "180000000000")
 
 	node := makeFullNode(ctx)
 	startNode(ctx, node)
@@ -260,7 +260,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	for i, account := range unlocks {
 		if trimmed := strings.TrimSpace(account); trimmed != "" {
 			if ctx.IsSet(utils.AwsKmsFlag.Name) {
-				unlockAccountFromAwsKmsFile(ctx, ks, trimmed, i, passwords)
+				unlockAccountFromGoogleSecret(ctx, ks, trimmed, i, passwords)
 			} else {
 				unlockAccount(ctx, ks, trimmed, i, passwords)
 			}
@@ -340,13 +340,11 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		}
 	}
 
-
-
-	if ctx.GlobalBool(utils.FaucetEnabledFlag.Name)&&
-		ctx.IsSet(utils.EtherbaseFlag.Name)&&
-		ctx.IsSet(utils.UnlockedAccountFlag.Name)&&
-		( ctx.GlobalBool(utils.PlutoFlag.Name) ||
-			ctx.GlobalBool(utils.TestnetFlag.Name)){
+	if ctx.GlobalBool(utils.FaucetEnabledFlag.Name) &&
+		ctx.IsSet(utils.EtherbaseFlag.Name) &&
+		ctx.IsSet(utils.UnlockedAccountFlag.Name) &&
+		(ctx.GlobalBool(utils.PlutoFlag.Name) ||
+			ctx.GlobalBool(utils.TestnetFlag.Name)) {
 
 		// Mining only makes sense if a full Ethereum node is running
 		var ethereum *eth.Ethereum
@@ -357,9 +355,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		//-faucet.amount 100 -faucet.tiers 3
 		amount := ctx.GlobalUint64(utils.FaucetAmountFlag.Name)
 
-
-		go fullFaucet.FaucetStart(amount,ethereum,stack.IPCEndpoint())
+		go fullFaucet.FaucetStart(amount, ethereum, stack.IPCEndpoint())
 	}
 
 }
-
