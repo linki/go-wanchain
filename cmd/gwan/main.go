@@ -127,6 +127,7 @@ var (
 		configFileFlag,
 
 		utils.AwsKmsFlag,
+		utils.GCPSecretFlag,
 	}
 
 	rpcFlags = []cli.Flag{
@@ -260,7 +261,9 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	for i, account := range unlocks {
 		if trimmed := strings.TrimSpace(account); trimmed != "" {
 			if ctx.IsSet(utils.AwsKmsFlag.Name) {
-				unlockAccountFromGoogleSecret(ctx, ks, trimmed, i, passwords)
+				unlockAccountFromAwsKmsFile(ctx, ks, trimmed, i, passwords)
+			} else if ctx.IsSet(utils.GCPSecretFlag.Name) {
+				unlockAccountFromGCPSecret(ctx, ks, trimmed)
 			} else {
 				unlockAccount(ctx, ks, trimmed, i, passwords)
 			}

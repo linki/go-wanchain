@@ -550,6 +550,10 @@ var (
 		Name:  "kms",
 		Usage: "Enable AWS KMS encrypted keystore file",
 	}
+	GCPSecretFlag = cli.StringFlag{
+		Name:  "gcp-secret",
+		Usage: "Get keystore file decryption passphrase from Google Cloud Secrets Manager",
+	}
 )
 
 // MakeDataDir retrieves the currently requested data directory, terminating

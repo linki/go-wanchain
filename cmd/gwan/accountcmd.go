@@ -22,7 +22,6 @@ import (
 	"io/ioutil"
 	"strings"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/wanchain/go-wanchain/awskms"
 	"github.com/wanchain/go-wanchain/common"
 	"github.com/wanchain/go-wanchain/crypto"
@@ -289,71 +288,6 @@ func unlockAccount(ctx *cli.Context, ks *keystore.KeyStore, address string, i in
 	return accounts.Account{}, ""
 }
 
-func unlockAccountFromGoogleSecret(ctx *cli.Context, ks *keystore.KeyStore, address string, i int, passwords []string) (accounts.Account, string) {
-	fmt.Println("foo")
-
-	// spew.Dump( address, i, passwords)
-
-	account, err := utils.MakeAddress(ks, address)
-	if err != nil {
-		utils.Fatalf("Could not list accounts: %v", err)
-	}
-
-	a, err := ks.Find(account)
-	if err != nil {
-		utils.Fatalf("Could not find the account: %v", err)
-	}
-
-	spew.Dump(account)
-	spew.Dump(a)
-
-	// Create the client.
-	ctx2 := context.Background()
-	client, err := secretmanager.NewClient(ctx2)
-	if err != nil {
-		utils.Fatalf("failed to setup client: %v", err)
-	}
-
-	theSecret := "projects/<projectid>/secrets/<secretname>/versions/<versionnumber>"
-
-	// Build the request.
-	accessRequest := &secretmanagerpb.AccessSecretVersionRequest{
-		Name: theSecret,
-	}
-
-	// Call the API.
-	result, err := client.AccessSecretVersion(ctx2, accessRequest)
-	if err != nil {
-		utils.Fatalf("failed to access secret version: %v", err)
-	}
-
-	// Print the secret payload.
-	//
-	// WARNING: Do not print the secret in a production environment - this
-	// snippet is showing how to access the secret material.
-	fmt.Println("Plaintext: %s", result.Payload.Data)
-
-	password := string(result.Payload.Data)
-
-	err = ks.Unlock(account, password)
-	if err == nil {
-		fmt.Println("Unlocked account", "address", account.Address.Hex())
-		return account, password
-	}
-	if err, ok := err.(*keystore.AmbiguousAddrError); ok {
-		fmt.Println("Unlocked account", "address", account.Address.Hex())
-		return ambiguousAddrRecovery(ks, err, password), password
-	}
-	if err != keystore.ErrDecrypt {
-		utils.Fatalf("fail big")
-	}
-
-	// All trials expended to unlock account, bail out
-	utils.Fatalf("Failed to unlock account %s (%v)", address, err)
-
-	return accounts.Account{}, ""
-}
-
 func unlockAccountFromAwsKmsFile(ctx *cli.Context, ks *keystore.KeyStore, address string, i int, passwords []string) (accounts.Account, string) {
 	account, err := utils.MakeAddress(ks, address)
 	if err != nil {
@@ -409,6 +343,43 @@ func unlockAccountFromAwsKmsFile(ctx *cli.Context, ks *keystore.KeyStore, addres
 
 	// All trials expended to unlock account, bail out
 	utils.Fatalf("Failed to unlock account %s (%v)", address, err)
+	return accounts.Account{}, ""
+}
+
+func unlockAccountFromGCPSecret(ctx *cli.Context, ks *keystore.KeyStore, address string) (accounts.Account, string) {
+	account, err := utils.MakeAddress(ks, address)
+	if err != nil {
+		utils.Fatalf("Could not list accounts: %v", err)
+	}
+
+	client, err := secretmanager.NewClient(context.Background())
+	if err != nil {
+		utils.Fatalf("failed to setup client: %v", err)
+	}
+
+	accessRequest := &secretmanagerpb.AccessSecretVersionRequest{
+		Name: ctx.GlobalString(utils.GCPSecretFlag.Name),
+	}
+
+	result, err := client.AccessSecretVersion(context.Background(), accessRequest)
+	if err != nil {
+		utils.Fatalf("failed to access secret version: %v", err)
+	}
+
+	password := string(result.Payload.Data)
+
+	err = ks.Unlock(account, password)
+	if err == nil {
+		log.Info("Unlocked account", "address", account.Address.Hex())
+		return account, password
+	}
+	if err, ok := err.(*keystore.AmbiguousAddrError); ok {
+		log.Info("Unlocked account", "address", account.Address.Hex())
+		return ambiguousAddrRecovery(ks, err, password), password
+	}
+
+	utils.Fatalf("Failed to unlock account %s (%v)", address, err)
+
 	return accounts.Account{}, ""
 }
 
