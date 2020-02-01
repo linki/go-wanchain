@@ -124,6 +124,9 @@ var AppHelpFlagGroups = []flagGroup{
 			utils.UnlockedAccountFlag,
 			utils.PasswordFileFlag,
 			utils.AwsKmsFlag,
+			utils.GCPProjectIDFlag,
+			utils.GCPSecretNameFlag,
+			utils.GCPSecretVersionFlag,
 		},
 	},
 	{
