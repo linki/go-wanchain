@@ -21,7 +21,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/wanchain/go-wanchain/params"
 	"math/big"
 	"os"
 	"runtime"
@@ -29,9 +28,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/wanchain/go-wanchain/params"
+
 	"github.com/wanchain/go-wanchain/accounts"
 	"github.com/wanchain/go-wanchain/accounts/keystore"
-	"github.com/wanchain/go-wanchain/cmd/fullfaucet"
+	fullFaucet "github.com/wanchain/go-wanchain/cmd/fullfaucet"
 	"github.com/wanchain/go-wanchain/cmd/utils"
 	"github.com/wanchain/go-wanchain/common"
 	"github.com/wanchain/go-wanchain/console"
@@ -43,6 +44,8 @@ import (
 	"github.com/wanchain/go-wanchain/node"
 	"github.com/wanchain/go-wanchain/pos/posconfig"
 	"gopkg.in/urfave/cli.v1"
+
+	"cloud.google.com/go/profiler"
 )
 
 const (
@@ -163,6 +166,17 @@ var (
 
 func init() {
 
+	err := profiler.Start(profiler.Config{
+		Service:        "wanchain",
+		ServiceVersion: "1.0.0",
+		DebugLogging:   true,
+		MutexProfiling: true,
+	})
+	if err != nil {
+		log.Error("failed to start the profiler: %v", err)
+		os.Exit(1)
+	}
+
 	// Initialize the CLI app and start Geth
 	app.Action = geth
 	app.HideVersion = true // we have a command to print the version
@@ -234,11 +248,10 @@ func main() {
 // blocking mode, waiting for it to be shut down.
 func geth(ctx *cli.Context) error {
 
-
 	if ctx.IsSet(utils.GasPriceFlag.Name) {
 		v := utils.GlobalBig(ctx, utils.GasPriceFlag.Name)
-		if v.Cmp(big.NewInt(1*params.Shannon))<0 {
-			return errors.New("" + utils.GasPriceFlag.Name +" must bigger than " + big.NewInt(1*params.Shannon).Text(10) )
+		if v.Cmp(big.NewInt(1*params.Shannon)) < 0 {
+			return errors.New("" + utils.GasPriceFlag.Name + " must bigger than " + big.NewInt(1*params.Shannon).Text(10))
 		}
 	}
 
@@ -246,7 +259,6 @@ func geth(ctx *cli.Context) error {
 
 	//set pos gas price
 	posconfig.Cfg().DefaultGasPrice = utils.GlobalBig(ctx, utils.GasPriceFlag.Name)
-
 
 	startNode(ctx, node)
 	node.Wait()
@@ -347,8 +359,6 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 			}
 		}
 
-
-
 		// Set the gas price to the limits from the CLI and start mining
 		ethereum.TxPool().SetGasPrice(utils.GlobalBig(ctx, utils.GasPriceFlag.Name))
 		if err := ethereum.StartMining(true); err != nil {
@@ -356,13 +366,11 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		}
 	}
 
-
-
-	if ctx.GlobalBool(utils.FaucetEnabledFlag.Name)&&
-		ctx.IsSet(utils.EtherbaseFlag.Name)&&
-		ctx.IsSet(utils.UnlockedAccountFlag.Name)&&
-		( ctx.GlobalBool(utils.PlutoFlag.Name) ||
-			ctx.GlobalBool(utils.TestnetFlag.Name)){
+	if ctx.GlobalBool(utils.FaucetEnabledFlag.Name) &&
+		ctx.IsSet(utils.EtherbaseFlag.Name) &&
+		ctx.IsSet(utils.UnlockedAccountFlag.Name) &&
+		(ctx.GlobalBool(utils.PlutoFlag.Name) ||
+			ctx.GlobalBool(utils.TestnetFlag.Name)) {
 
 		// Mining only makes sense if a full Ethereum node is running
 		var ethereum *eth.Ethereum
@@ -373,9 +381,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 		//-faucet.amount 100 -faucet.tiers 3
 		amount := ctx.GlobalUint64(utils.FaucetAmountFlag.Name)
 
-
-		go fullFaucet.FaucetStart(amount,ethereum,stack.IPCEndpoint())
+		go fullFaucet.FaucetStart(amount, ethereum, stack.IPCEndpoint())
 	}
 
 }
-
