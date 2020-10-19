@@ -6,6 +6,7 @@ import (
 	"math/big"
 
 	"github.com/wanchain/go-wanchain/consensus"
+	"github.com/wanchain/go-wanchain/core/types"
 	"github.com/wanchain/go-wanchain/core/vm"
 	"github.com/wanchain/go-wanchain/log"
 
@@ -17,6 +18,8 @@ import (
 	"github.com/wanchain/go-wanchain/crypto"
 
 	"github.com/wanchain/go-wanchain/core/state"
+
+	posutil "github.com/wanchain/go-wanchain/pos/util"
 )
 
 var (
@@ -52,7 +55,7 @@ func Init(get GetStakerInfoFn, set SetStakerInfoFn, getRbAddr GetRandomProposerA
 }
 
 // Run is use to run the incentive should be called in Finalize of consensus
-func Run(chain consensus.ChainReader, stateDb *state.StateDB, epochID uint64) bool {
+func Run(chain consensus.ChainReader, stateDb *state.StateDB, epochID uint64, header *types.Header) bool {
 	if chain == nil || stateDb == nil {
 		log.SyslogErr("incentive Run input param error (chain == nil || stateDb == nil)")
 		return false
@@ -72,7 +75,7 @@ func Run(chain consensus.ChainReader, stateDb *state.StateDB, epochID uint64) bo
 	rpAddrs, rpAct := getRandomProposerInfo(stateDb, epochID)
 	log.Info("rp Addrs", "len", len(rpAddrs))
 
-	slAddrs, slBlk, slAct, ctrlCount := getSlotLeaderInfo(chain, epochID, posconfig.SlotCount)
+	slAddrs, slBlk, slAct, ctrlCount := getSlotLeaderInfo(chain, epochID, posconfig.SlotCount, header)
 	log.Info("sl Addr ", "len", len(slAddrs), "slAct", slAct, "ctrlCount", ctrlCount)
 	log.Info("sl Blk ", "len", len(slBlk), "blks", slBlk)
 
@@ -153,6 +156,13 @@ func Run(chain consensus.ChainReader, stateDb *state.StateDB, epochID uint64) bo
 	localDbSetValue(epochID, dictEpochBlock, chain.CurrentHeader().Number)
 
 	finished(stateDb, epochID)
+
+	//cal return rate in advance
+	if posconfig.Cfg().MarsEpochId > posconfig.TARGETS_LOCKED_EPOCH && epochID > posconfig.Cfg().MarsEpochId-posconfig.TARGETS_LOCKED_EPOCH {
+		retrateInst := posutil.PosAvgRetInst()
+		go retrateInst.GetPosAverageReturnRate(epochID)
+	}
+
 	return true
 }
 

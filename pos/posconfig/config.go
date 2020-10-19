@@ -33,14 +33,16 @@ const (
 	PosLocalDB       = "pos"
 	IncentiveLocalDB = "incentive"
 	ReorgLocalDB     = "forkdb"
-	ApolloEpochID     = 18104
-	AugustEpochID     = 18116  //TODO change it as mainnet 8.8
+
+	AvgRetDB      = "avgretdb"
+	ApolloEpochID = 18104
+	AugustEpochID = 18116 //TODO change it as mainnet 8.8
 
 	TestnetAdditionalBlock = 6661460
 )
 
 var EpochLeadersHold [][]byte
-var TestnetAdditionalValue = new(big.Int).Mul(big.NewInt(210000000),big.NewInt(1e18))
+var TestnetAdditionalValue = new(big.Int).Mul(big.NewInt(210000000), big.NewInt(1e18))
 
 const (
 	// EpochLeaderCount is count of pk in epoch leader group which is select by stake
@@ -61,6 +63,7 @@ const (
 	IncentiveDelayEpochs = 1
 	IncentiveStartStage  = Stage2K
 
+	// TODO: recovery K and time
 	// K count of each epoch
 	KCount = 12
 	K      = 1440
@@ -101,8 +104,19 @@ const (
 	MainnetMercuryEpochId = 18250 //2019.12.20
 	TestnetMercuryEpochId = 18246 //2019.12.16
 
-	MainnetVenusEpochId = 11112222
+	MainnetVenusEpochId = 18557
 	TestnetVenusEpochId = 18369
+
+	MainnetMarsEpochId = MainnetVenusEpochId
+	TestnetMarsEpochId = 18506 //2020.09.01
+
+	TARGETS_LOCKED_EPOCH = 90 //90 DAYS,90 EPOCH
+	RETURN_DIVIDE        = 10000
+
+	// StoremanEpochid -> posconfig.Cfg().MarsEpochId
+	// StoremanEpochid = ApolloEpochID + TARGETS_LOCKED_EPOCH
+
+	SeekBackCount = uint64(10) // use 10 epoch before state
 )
 
 var TxDelay = K
@@ -131,9 +145,10 @@ type Config struct {
 	SignBegin     uint64
 	SignEnd       uint64
 
-	MercuryEpochId uint64
-	VenusEpochId uint64
-	DefaultGasPrice	 *big.Int
+	MercuryEpochId  uint64
+	VenusEpochId    uint64
+	MarsEpochId     uint64
+	DefaultGasPrice *big.Int
 
 	SyncTargetBlokcNum uint64
 }
@@ -152,6 +167,7 @@ var DefaultConfig = Config{
 	Stage6K - 1,
 	Stage8K,
 	Stage10K - 1,
+	0,
 	0,
 	0,
 
@@ -204,28 +220,34 @@ func Init(nodeCfg *node.Config, networkId uint64) {
 		PosOwnerAddr = PosOwnerAddrMainnet
 
 		DefaultConfig.MercuryEpochId = MainnetMercuryEpochId
-		DefaultConfig.VenusEpochId   = MainnetVenusEpochId
+		DefaultConfig.VenusEpochId = MainnetVenusEpochId
+		DefaultConfig.MarsEpochId = MainnetMarsEpochId
 
 	} else if networkId == 6 {
 		PosOwnerAddr = PosOwnerAddrInternal
 		if IsDev { // --plutodev
+			// TODO: for debug change WhiteListDev -> WhiteListMainnet
 			WhiteList = WhiteListDev // only one whiteAccount, used as single node.
 		} else {
 			WhiteList = WhiteListOrig
 		}
 		DefaultConfig.MercuryEpochId = TestnetMercuryEpochId
-		DefaultConfig.VenusEpochId   = TestnetVenusEpochId
+		DefaultConfig.VenusEpochId = TestnetVenusEpochId
+		DefaultConfig.MarsEpochId = TestnetMarsEpochId
 	} else if networkId == 4 {
 		PosOwnerAddr = PosOwnerAddrInternal
-		WhiteList = WhiteListOrig
+		// TODO: for debug set to WhiteListOrig -> WhiteListDev
+		WhiteList = WhiteListDev
 		DefaultConfig.MercuryEpochId = TestnetMercuryEpochId
-		DefaultConfig.VenusEpochId   = TestnetVenusEpochId
+		DefaultConfig.VenusEpochId = TestnetVenusEpochId
+		DefaultConfig.MarsEpochId = TestnetMarsEpochId
 	} else { // testnet
 		PosOwnerAddr = PosOwnerAddrTestnet
 		WhiteList = WhiteListTestnet
 
 		DefaultConfig.MercuryEpochId = TestnetMercuryEpochId
 		DefaultConfig.VenusEpochId = TestnetVenusEpochId
+		DefaultConfig.MarsEpochId = TestnetMarsEpochId
 	}
 
 	EpochLeadersHold = make([][]byte, len(WhiteList))
