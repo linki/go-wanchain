@@ -22,8 +22,13 @@ import (
 	"errors"
 	"math/big"
 
+	"github.com/wanchain/go-wanchain/pos/posconfig"
+	"github.com/wanchain/go-wanchain/pos/util"
+
 	"crypto/ecdsa"
 	"strings"
+
+	"fmt"
 
 	"github.com/wanchain/go-wanchain/accounts/abi"
 	"github.com/wanchain/go-wanchain/accounts/keystore"
@@ -36,7 +41,6 @@ import (
 	"github.com/wanchain/go-wanchain/log"
 	"github.com/wanchain/go-wanchain/params"
 	"golang.org/x/crypto/ripemd160"
-	"fmt"
 )
 
 // RunPrecompiledContract runs and evaluates the output of a precompiled contract.
@@ -289,7 +293,13 @@ type bn256Add struct{}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bn256Add) RequiredGas(input []byte) uint64 {
-	return params.Bn256AddGas
+	epid, _ := util.GetCurrentBlkEpochSlotID()
+	if epid < posconfig.Cfg().MarsEpochId {
+		return params.Bn256AddGas
+	}
+
+	return params.Bn256AddGasV2
+
 }
 
 func (c *bn256Add) Run(input []byte, contract *Contract, evm *EVM) ([]byte, error) {
@@ -315,7 +325,11 @@ type bn256ScalarMul struct{}
 
 // RequiredGas returns the gas required to execute the pre-compiled contract.
 func (c *bn256ScalarMul) RequiredGas(input []byte) uint64 {
-	return params.Bn256ScalarMulGas
+	epid, _ := util.GetCurrentBlkEpochSlotID()
+	if epid < posconfig.Cfg().MarsEpochId {
+		return params.Bn256ScalarMulGas
+	}
+	return params.Bn256ScalarMulGasV2
 }
 
 func (c *bn256ScalarMul) Run(input []byte, contract *Contract, evm *EVM) ([]byte, error) {
@@ -848,11 +862,11 @@ func (c *wanCoinSC) refund(all []byte, contract *Contract, evm *EVM) ([]byte, er
 
 	addrSrc := contract.CallerAddress
 
-
 	evm.StateDB.AddBalance(addrSrc, value)
 	return []byte{1}, nil
 
 }
+
 func DecodeRingSignOut(s string) (error, []*ecdsa.PublicKey, *ecdsa.PublicKey, []*big.Int, []*big.Int) {
 	ss := strings.Split(s, "+")
 	if len(ss) < 4 {
@@ -1000,5 +1014,3 @@ func GetSupportStampOTABalances() []*big.Int {
 
 	return stampBalances
 }
-
-
